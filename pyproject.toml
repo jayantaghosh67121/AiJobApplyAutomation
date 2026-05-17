@@ -49,7 +49,7 @@ dependencies = [
     
     # Embeddings & NLP
     "sentence-transformers>=2.2.0",
-    "spacy>=3.7.0",
+    "spacy>=3.7.0,<3.8",
     
     # Config & validation
     "pydantic>=2.5.0",
