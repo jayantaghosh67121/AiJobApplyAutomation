@@ -1,0 +1,179 @@
+version: "3.9"
+
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16-latest
+    container_name: job-bot-postgres
+    environment:
+      POSTGRES_USER: job_bot_user
+      POSTGRES_PASSWORD: job_bot_password
+      POSTGRES_DB: job_bot_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_bot_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - job-bot-network
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: job-bot-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass redis_password
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - job-bot-network
+
+  # MinIO for S3-compatible object storage (local development)
+  minio:
+    image: minio/minio:latest
+    container_name: job-bot-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - job-bot-network
+
+  # FastAPI application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job-bot-app
+    environment:
+      DATABASE_URL: postgresql+psycopg://job_bot_user:job_bot_password@postgres:5432/job_bot_db
+      REDIS_URL: redis://:redis_password@redis:6379/0
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      CELERY_BROKER_URL: redis://:redis_password@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis_password@redis:6379/0
+      DEBUG: "True"
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./scripts:/app/scripts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - job-bot-network
+
+  # Celery worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job-bot-worker
+    environment:
+      DATABASE_URL: postgresql+psycopg://job_bot_user:job_bot_password@postgres:5432/job_bot_db
+      REDIS_URL: redis://:redis_password@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis_password@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis_password@redis:6379/0
+      DEBUG: "False"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+    depends_on:
+      - postgres
+      - redis
+      - app
+    command: celery -A app.worker worker --loglevel=info --concurrency=4
+    networks:
+      - job-bot-network
+
+  # Celery Beat scheduler
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job-bot-beat
+    environment:
+      DATABASE_URL: postgresql+psycopg://job_bot_user:job_bot_password@postgres:5432/job_bot_db
+      REDIS_URL: redis://:redis_password@redis:6379/0
+      CELERY_BROKER_URL: redis://:redis_password@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:redis_password@redis:6379/0
+      DEBUG: "False"
+      LOG_LEVEL: INFO
+    volumes:
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./celerybeat-schedule:/app/celerybeat-schedule
+    depends_on:
+      - postgres
+      - redis
+      - app
+    command: celery -A app.worker beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    networks:
+      - job-bot-network
+
+  # Streamlit dashboard
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: job-bot-dashboard
+    environment:
+      DATABASE_URL: postgresql+psycopg://job_bot_user:job_bot_password@postgres:5432/job_bot_db
+      REDIS_URL: redis://:redis_password@redis:6379/0
+      STREAMLIT_SERVER_PORT: 8501
+      STREAMLIT_THEME_primaryColor: "#0d47a1"
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./dashboard:/app/dashboard
+      - ./app:/app/app
+    depends_on:
+      - postgres
+      - redis
+      - app
+    command: streamlit run dashboard/app.py
+    networks:
+      - job-bot-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  job-bot-network:
+    driver: bridge

@@ -1,0 +1,196 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "job-automation-bot"
+version = "0.1.0"
+description = "AI-powered job application automation system"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" }
+]
+license = { text = "MIT" }
+keywords = ["job", "automation", "ai", "scraping", "applications"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Web framework
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "slowapi>=0.1.9",  # Rate limiting
+    
+    # Database
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "psycopg[binary]>=3.1.0",
+    "pgvector>=0.2.0",
+    
+    # Task queue
+    "celery[redis]>=5.3.0",
+    "redis>=5.0.0",
+    
+    # Web scraping
+    "playwright>=1.40.0",
+    "playwright-stealth>=1.0.1",
+    "beautifulsoup4>=4.12.0",
+    "httpx>=0.25.0",
+    
+    # LLM
+    "anthropic>=0.7.0",
+    
+    # Embeddings & NLP
+    "sentence-transformers>=2.2.0",
+    "spacy>=3.7.0",
+    
+    # Config & validation
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    
+    # PDF generation
+    "weasyprint>=59.0",
+    "markdown>=3.5.0",
+    
+    # Dashboard
+    "streamlit>=1.28.0",
+    
+    # Gmail integration
+    "google-auth-oauthlib>=1.1.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-api-python-client>=2.100.0",
+    
+    # Utilities
+    "python-dateutil>=2.8.0",
+    "pytz>=2023.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-playwright>=0.4.0",
+    "respx>=0.20.0",
+    "httpx>=0.25.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+    "ipython>=8.17.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/job-automation-bot"
+Documentation = "https://github.com/yourusername/job-automation-bot/blob/main/README.md"
+Repository = "https://github.com/yourusername/job-automation-bot.git"
+Issues = "https://github.com/yourusername/job-automation-bot/issues"
+
+[tool.black]
+line-length = 100
+target-version = ["py311", "py312"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # line too long (black handles this)
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    ".eggs",
+    "*.egg",
+    "build",
+    "dist",
+]
+
+[tool.ruff.isort]
+known-first-party = ["app"]
+known-third-party = ["fastapi", "sqlalchemy", "celery", "anthropic", "streamlit"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = [".venv", "venv", "build", "dist"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--strict-markers -ra"
+markers = [
+    "unit: unit tests",
+    "integration: integration tests",
+    "scraper: scraper tests",
+    "slow: slow tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.alembic]
+# Path to migration scripts
+sqlalchemy.url = "driver://user:password@localhost/dbname"
+script_location = "alembic"
+version_path_separator = "/"
+version_locations = "%(here)s/alembic/versions"
+
+[tool.celery]
+broker_url = "redis://localhost:6379/0"
+result_backend = "redis://localhost:6379/0"
+task_serializer = "json"
+accept_content = ["json"]
+result_serializer = "json"
+timezone = "UTC"
+enable_utc = true
+task_track_started = true
+task_time_limit = 1800  # 30 minutes
+task_soft_time_limit = 1500  # 25 minutes
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
