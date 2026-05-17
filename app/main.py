@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import init_db, close_db
+from app.api.users import router as users_router
 
 # Import routers here (will be created in Phase 1)
 # from app.api import jobs, applications, profiles
@@ -62,10 +63,11 @@ def create_app() -> FastAPI:
             "openapi_schema": "/openapi.json",
         }
 
-    # Include routers (will be added in Phase 1)
+    # Include routers (Phase 1)
+    app.include_router(users_router)
+    # More routers to be added in Phase 2+
     # app.include_router(jobs.router, prefix="/api/jobs", tags=["Jobs"])
     # app.include_router(applications.router, prefix="/api/applications", tags=["Applications"])
-    # app.include_router(profiles.router, prefix="/api/profiles", tags=["Profiles"])
 
     return app
 
